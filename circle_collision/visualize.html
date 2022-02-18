@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<head>
+  <style>
+      .hidden
+      {
+          display: none;
+      }
+  </style>
+</head>
+<body>
+<!--Colors are from: https://www.designwizard.com/blog/design-trends/colour-combination-->
+<div id="ui">
+  <div style="float:right; background-color: #101820FF;" id="menu">
+    <div>
+        <label for="switchDetailedView" style="margin:auto; font-size: xx-large; color:#F2AA4CFF; padding:10px">Enable detailed view</label>
+        <input type="checkbox" id="switchDetailedView" style="font-size: xx-large; margin-right:10px">
+    </div>
+    <label style="padding:10px; font-size:xx-large; color:#F2AA4CFF">Label centroids</label> 
+    <div>
+      <label for="cnBased" style="padding:35px; font-size: xx-large; color:#F2AA4CFF;">-closest node to centroid</label>
+      <input type="radio" id="freqBased" name="labelCentroidsRb" value="freqBased" class="labelCentroidsRb" checked>
+    </div>
+    <div>
+      <label for="freqBased" style="padding:35px; font-size:xx-large; color:#F2AA4CFF">-highest frequency</label> 
+      <input type="radio" id="cnBased" name="labelCentroidsRb" value="cnBased" class="labelCentroidsRb">
+    </div>
+    <!--<div>
+        <label for="itSlider" style="font-size: xx-large; margin:auto; color:#F2AA4CFF; padding:10px">Iterations (collision force)</label>
+        <input type="range" id="itSlider" min="1" max="10" value="5" style="justify-content: center;">
+        <label style="font-size: xx-large; margin:auto; color:#F2AA4CFF;padding:10px" id="sliderVal">5</label>
+    </div>-->
+    <div>
+        <label for="showCentroids" style="font-size:xx-large; color:#F2AA4CFF; padding:10px">Show centroids</label>
+        <input type="checkbox" id="showCentroids">
+    </div>
+    <div>
+        <label for="backgroundColor" style="font-size: xx-large;color:#F2AA4CFF; padding:10px">Choose background color</label>
+        <input type="color" value="#FFFFFF" id="backgroundColor">
+    </div>
+    <div>
+      <button style="padding:10px; font-size:xx-large; color:#F2AA4CFF" onclick="focusOnWholeScene()">Focus the whole scene</button>
+    </div>
+    <div style="margin:auto">
+        <button id="download" style="font-size: xx-large; padding:10px">Download</button>
+        <input type="text" value="scene.png" id="filename" style="font-size: xx-large;">
+    </div>
+  </div>
+  <button style="float:right" id="menuToggle">Toggle menu</button>
+  <div id="info" style="border-radius:10px; text-align:center; width:15%;height:auto; display: block; background-color: #101820FF;">
+    <div id="name" style="margin:auto; font-size:xx-large; color:#F2AA4CFF"></div>
+    <div id="freq" style="margin:auto; font-size:xx-large; color:#F2AA4CFF"></div>
+    <div id="distToCtrd" style="margin:auto; font-size:xx-large; color:#F2AA4CFF"></div>
+  </div>
+</div>
+  <svg id="container"></svg>
+</body>
+<script src="d3.min.js"></script>
+<script src="prepared_data.js"></script>
+<script>
+  var w = window.innerWidth;
+  var h = window.innerHeight;
+  const fontType = "sans-serif";
+  var currentSelection = null;
+  var circleAround = null;
+  var detailedView = false;
+  var edgeToCentroid = null;
+  var edgeLabel = null;
+  var selectedCentroid = null;
+  var hiddenMenu = false;
+  var ended = false;
+
+  function pxSize(d) {
+    return Math.max(15, Math.min(d.freq, 80));
+  }
+
+  function getFont(d) {
+    px = pxSize(d);
+    return `${px}px ${fontType}`;
+  }
+
+  // Modified From: https://stackoverflow.com/questions/118241/calculate-text-width-with-javascript
+  function getTextSize(text, font) {
+    const canvas =
+      getTextWidth.canvas ||
+      (getTextWidth.canvas = document.createElement("canvas"));
+    const context = canvas.getContext("2d");
+    context.font = font;
+    const metrics = context.measureText(text);
+    return [
+      metrics.width,
+      metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent,
+      metrics.actualBoundingBoxDescent,
+    ];
+  }
+
+  function getTextWidth(text, font) {
+    return getTextSize(text, font)[0];
+  }
+
+  function getTextHeight(text, font) {
+    return getTextSize(text, font)[1];
+  }
+
+  function getTextLowerCoord(text, font) {
+    return getTextSize(text, font)[2];
+  }
+
+  function switchDetailedView(checked) {
+      labels.style("display", checked ? null : "none");
+      centroid_labels.style("display", checked ? "none" : null);
+      if (currentSelection != null) {
+        canvas
+          .select("#circleAround")
+          .style("display", checked ? null : "none");
+        edgeToCentroid.style("display", checked ? null : "none");
+        edgeLabel.style("display", checked ? null : "none");
+      }
+    }
+
+  d3.select("#switchDetailedView").on("click", (event)=>switchDetailedView(event.target.checked));
+
+  zoom = d3.zoom().on("zoom", function (event) {
+    zoomFactor = event.transform.k;
+    canvas.attr("transform", event.transform);
+  });
+
+  var container = d3.select("#container").attr("width", w).attr("height", h);
+
+  var canvas = container
+    .on("click", function (event, d) {
+      d3.select("#name").html("");
+      d3.select("#freq").html("");
+      d3.select("#distToCtrd").html("");
+      currentSelection = null;
+      circleround = null;
+      edgeToCentroid = null;
+      edgeLabel = null;
+      canvas.select("#circleAround").remove();
+      canvas.select("line").remove();
+      canvas.select("#edgeLabel").remove();
+      canvas.select("#selectedCentroid").remove();
+    })
+    .call(zoom)
+    .append("g");
+
+  const f_nodes = data.nodes.filter((n) => !n.is_centroid); // Filter out the centroid nodes
+  const c_nodes = data.nodes.filter((n) => n.is_centroid);
+  const nodes = canvas.selectAll(null).data(f_nodes).enter().append("g");
+
+  const centroids = canvas
+    .selectAll(null)
+    .data(c_nodes)
+    .enter()
+    .append("g")
+    .append("circle")
+    .attr("r", 20)
+    .attr("fill", (d) => d.color)
+    .style("display", d3.select("#showCentroids").checked ? null : "none")
+    .on("tick", tick);
+
+  d3.select("#showCentroids").on("click", (event) => {
+    centroids.style("display", event.target.checked ? null : "none");
+  });
+
+  d3.select("#menuToggle")
+    .on("click",(event)=>{
+        hiddenMenu = !hiddenMenu;
+        d3.select("#menu").classed("hidden",hiddenMenu);
+    });
+
+  var simul = d3
+    .forceSimulation(data.nodes)
+    .force(
+      "link",
+      d3
+        .forceLink(data.edges)
+        .id((n) => n.name)
+        .distance((e) => parseFloat(e.dist) * data.amountClusters)
+    )
+    .force("charge", d3.forceManyBody())
+    .force("center", d3.forceCenter(w / 2, h / 2))
+    .force(
+      "collision",
+      d3.forceCollide().radius((d) => getTextWidth(d.name, getFont(d)) / 2)
+    )
+    .on("tick", tick)
+    .on("end",(event)=>ended=true);
+  // var rects = nodes.append("rect")
+  // .style("fill","none")
+  // .style("stroke","black")
+  // .on("tick",tick)
+  // .attr("width",d=>getTextWidth(d.name,getFont(d)))
+  // .attr("height",d=>getTextHeight(d.name,getFont(d)))
+  // .on("tick",tick);
+
+  window.addEventListener(
+    "resize",
+    function (event) {
+      w = window.innerWidth;
+      h = window.innerHeight;
+      container.attr("width", w).attr("height", h);
+      simul.force("center", d3.forceCenter(w / 2, h / 2));
+    },
+    true
+  );
+
+  function dragged(event, d) {
+    // This sets the fixed x and y positions
+    d.fx = event.x;
+    d.fy = event.y;
+    d.x = event.x;
+    d.y = event.y;
+    tick();
+  }
+
+  function dragEnd(event, d) {
+    d.fx = null;
+    d.fy = null;
+  }
+
+  function dragStart(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+
+  var drag = d3
+    .drag()
+    .on("start", dragStart)
+    .on("drag", dragged)
+    .on("end", dragEnd);
+
+  // var circles = nodes.append("circle")
+  // .attr("r",d=>getTextWidth(d.name,getFont(d))/2)
+  // .style("fill", "none")
+  // .style("stroke",d=>d.color);
+
+  
+  function getSvgUri(svgEl)
+  {
+    svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    var svgData = svgEl.outerHTML;
+    var preface = '<?xml version="1.0" standalone="no"?>\r\n';
+    var svgBlob = new Blob([preface, svgData], {type:"image/svg+xml;charset=utf-8"});
+    var svgUrl = URL.createObjectURL(svgBlob);
+    return svgUrl
+  }
+  // See: https://stackoverflow.com/questions/23218174/how-do-i-save-export-an-svg-file-after-creating-an-svg-with-d3-js-ie-safari-an senz answer
+function saveSvg(svgEl, name) {
+    svgUrl=getSvgUri(svgEl);
+    console.log("SVG URL: " + svgUrl);
+    var downloadLink = document.createElement("a");
+    downloadLink.href = svgUrl;
+    downloadLink.download = name;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+}
+
+
+function getExtension(filename_ext)
+{
+    fn = filename_ext.split('.');
+    if(fn.length == 1) return "png";
+    else if(fn.length == 2) return fn[1];
+    return "invalid";
+}
+
+function getOnlyFilename(filename_ext)
+{
+    return filename_ext.split(".")[0];
+}
+
+function toBase64(svgElem)
+{
+    const ser = new XMLSerializer().serializeToString(svgElem);
+    const encoded = btoa(unescape(encodeURIComponent(ser)));
+    return "data:image/svg+xml;base64," + encoded;
+}
+
+function saveRasterized(svgElem,filename,ext)
+{
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    
+    const base64img = toBase64(svgElem);
+
+    var img = new Image(w,h);
+    img.onload = () =>
+    {
+        const ctxt = canvas.getContext("2d");
+        ctxt.drawImage(img,0,0,canvas.width,canvas.height);
+        const imageUrl = canvas.toDataURL(`image/${ext}`);
+        var downloadLink = document.createElement("a");
+        downloadLink.href = imageUrl;
+        downloadLink.download = filename + "." + ext;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+
+    };
+    img.onerror= (handler) => 
+    {
+        alert(`Error when rendering the image to ${ext}`);
+    }
+    img.src = base64img;    
+}
+
+function saveAsImage()
+{
+    d3.select("#ui").classed("hidden",true);
+    filename_ext = d3.select("#filename").node().value;
+    filename = getOnlyFilename(filename_ext);
+    ext = getExtension(filename_ext);
+    if(ext == "svg")
+        saveSvg(container.node(),filename + "." + ext);
+    else if(ext == "png" || ext == "jpg" || ext == "jpeg")
+        saveRasterized(container.node(),filename,ext);
+    else 
+        alert("Invalid filename extension. Allowed are: jpg, jpeg, png, svg");
+    d3.select("#ui").classed("hidden",false);
+}
+
+d3.select("#download")
+.on("click",event=>{
+    saveAsImage();
+});
+
+d3.select("#backgroundColor")
+.on("change",event=>container.transition().duration(1000).style("background-color",event.target.value));
+
+  const centroid_labels = canvas
+    .selectAll(null)
+    .data(c_nodes)
+    .enter()
+    .append("g")
+    .append("text")
+    .text((d) => d.highest_freq)
+    .style("font-size", "150px")
+    .style("font-family", fontType)
+    .style("display", d3.select("#switchDetailedView").checked ? "none" : null)
+    //.attr("text-anchor","middle")
+    .attr("fill", (d) => d.color)
+    .attr("cursor", "pointer")
+    .classed("centroidLabels", true)
+    .call(drag);
+
+  d3.selectAll(".labelCentroidsRb").on("click", (d) => {
+    canvas
+      .selectAll(".centroidLabels")
+      .text(
+        d.target.value == "cnBased"
+          ? (d) => d.closest_word
+          : (d) => d.highest_freq
+      );
+  });
+
+  var labels = nodes
+    .append("text")
+    .text((d) => d.name)
+    .style("font-size", (d) => `${pxSize(d)}px`)
+    .style("font-family", fontType)
+    //.attr("text-anchor","middle")
+    .attr("text-anchor", "middle")
+    .style("fill", (d) => d.color)
+    .style("cursor", "pointer")
+    .style("display", d3.select("#switchDetailedView").checked ? null : "none")
+    .on("click", click)
+    .call(drag);
+
+
+  document.addEventListener("keydown",event=>{
+    if(event.key == "f")
+    {
+      focusOnWholeScene();
+    }
+  });
+
+  function focusOnWholeScene(fast = false) {
+    n = d3.select("#switchDetailedView").node();  
+    if(!n.checked) n.click();
+    const leftmost = f_nodes.reduce( (node1, node2)=> node1.x < node2.x ? node1 : node2).x;
+    const rightmost = f_nodes.reduce( (node1,node2)=> node1.x > node2.x ? node1 : node2).x;
+    const bottommost = f_nodes.reduce( (node1,node2)=> node1.y < node2.y ? node1 : node2).y;
+    const topmost = f_nodes.reduce((node1,node2)=>node1.y > node2.y ? node1 : node2).y;
+    const scaleX = container.node().width.baseVal.value / (rightmost - leftmost);
+    const scaleY = container.node().height.baseVal.value / (topmost - bottommost);
+    const scaleVal = Math.min(scaleX,scaleY);
+    const transX = (-leftmost * scaleVal) + container.node().width.baseVal.value / 2.0 - (((rightmost-leftmost) / 2) * scaleVal);
+    const transY = -bottommost * scaleVal;
+    transform = {k : scaleVal, x : transX, y:transY};
+    if(fast) container.call(zoom.transform,d3.zoomIdentity.translate(transX,transY).scale(scaleVal))
+    else container.transition().duration(500).call(zoom.transform,d3.zoomIdentity.translate(transX,transY).scale(scaleVal));
+
+      //canvas.attr("transform",translate + "\n" + scale);
+
+    }
+
+
+  function click(event, d) {
+    selectedEdge = data.edges.filter(
+      (e) => e.source.name == d.name && e.target.is_centroid
+    );
+    d3.select("#freq").html(`Frequency: ${d.freq}`);
+    d3.select("#name").html(`Name: ${d.name}`);
+    d3.select("#distToCtrd").html(
+      "Distance to centroid: " + parseFloat(selectedEdge[0].dist).toFixed(2)
+    );
+    canvas.select("#circleAround").remove();
+    currentSelection = d;
+    circleAround = canvas
+      .append("circle")
+      .attr("r", getTextWidth(d.name, getFont(d)) / 2)
+      .style("fill", "none")
+      .style("stroke", "black")
+      .style("stroke-width", "2.5px")
+      .attr("id", "circleAround");
+
+    if (edgeLabel != null) edgeLabel.remove();
+    if (selectedCentroid != null) selectedCentroid.remove();
+    d3.select("line").remove();
+    edgeToCentroid = canvas
+      .selectAll(null)
+      .data(selectedEdge)
+      .enter()
+      .append("line")
+      //.attr("id", (e,i) => i)
+      .style("stroke", (e) => e.source.color)
+      .style("stroke-width", "3px");
+
+    selectedCentroid = canvas
+      .selectAll(null)
+      .data([selectedEdge[0].target])
+      .enter()
+      .append("g")
+      .append("circle")
+      .attr("r", 20)
+      .attr("fill", (d) => d.color)
+      .attr("id", "selectedCentroid");
+
+    edgeLabel = canvas
+      .selectAll(null)
+      .data(selectedEdge)
+      .enter()
+      .append("text")
+      .text((e) => parseFloat(e.dist).toFixed(2))
+      .attr("id", "edgeLabel")
+      .attr("font-size", "35px");
+
+    tick();
+    event.stopPropagation();
+  }
+
+  function getDegreesFromRadians(rad) {
+    return rad * (180 / Math.PI);
+  }
+
+  function tick() {
+    //circles
+    //.attr("cx", d=>d.x)
+    //.attr("cy",d=>d.y);
+
+    labels
+      .attr("x", (d) => d.x) //+getTextWidth(d.name,getFont(d))/2)
+      .attr("y", (d) => {
+        let y = d.y;
+        y = y + getTextHeight(d.name, getFont(d)) / 2;
+        return y;
+      });
+
+    centroid_labels
+      .attr("x", (d) => d.x)
+      .attr("y", (d) => {
+        let y = d.y + getTextHeight(d.name, `150px ${fontType}`);
+        y = y - getTextLowerCoord(d.name, `150px ${fontType}`);
+        return y;
+      });
+
+    if (currentSelection != null) {
+      circleAround
+        .attr("cx", currentSelection.x)
+        .attr("cy", currentSelection.y);
+
+      selectedCentroid.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+
+      edgeToCentroid
+        .attr("x1", (d) => d.source.x)
+        .attr("y1", (d) => d.source.y)
+        .attr("x2", (d) => d.target.x)
+        .attr("y2", (d) => d.target.y);
+
+      edgeLabel
+        .attr("x", (d) => (d.source.x + d.target.x) / 2)
+        .attr("y", (d) => (d.source.y + d.target.y) / 2 - 6.5)
+        .attr("transform", (d, i) => {
+          let rx = d.source.x - d.target.x;
+          let ry = d.source.y - d.target.y;
+          rx = rx / Math.sqrt(rx * rx + ry * ry);
+          ry = ry / Math.sqrt(rx * rx + ry * ry);
+          x = (d.source.x + d.target.x) / 2;
+          y = (d.source.y + d.target.y) / 2 - 6.5;
+          let nx = 1;
+          let ny = 0;
+          det = rx * ny + ry * nx;
+          cos = rx * nx + ry * ny;
+          deg = getDegreesFromRadians(Math.acos(cos));
+          rotAmount = det < 0 ? -deg : deg;
+          rotAmount =
+            rotAmount < -90 || rotAmount > 90 ? rotAmount + 180 : rotAmount;
+          return `rotate(${rotAmount} ${x} ${y})`;
+        });
+    }
+
+    centroids.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
+
+    // rects
+    // .attr("x",d=>d.x)
+    // .attr("y",d=>d.y);
+  }
+</script>
