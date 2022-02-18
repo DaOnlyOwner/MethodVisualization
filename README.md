@@ -3,14 +3,22 @@
 ## Overview
 This toolchain provides a user-friendly interactive web application visualization tool for 
 exploring IoT ontology concept clustering results.
-IoTvizium encodes the visualization with three aspects (concept color, concept size, and semantic distance) and incorporates three visualization methods (wordclouds, bounding circle and bounding box).
+IoTvizium encodes the visualization with three aspects (concept color, concept size, and semantic distance) and incorporates three visualization methods (wordclouds, force directed graph with bounding circle and force directed graph with bounding box).
 
 ## Requirements
 - Python 3.9.0
-- for python requirements see requirements.txt
+- Numpy
+- Sklearn
 
 ## Usage
+If you just want to test the application:
+```console
+$ git clone https://github.com/DaOnlyOwner/MethodVisualization.git
+```
+- Navigate into box_collision or circle_collision and open visualize.html. It works right out of the box with a sample input.
 
+If you also want to try to generate input, this should be done with the toolchain. 
+However if you want to do generate input yourself, look into example_input. 2analysis_classes.txt contains among other things the frequency. 3words_with_vectors.pkl contains the words with their vector representation and 4clusters-50.yml lists the different clusters.   
 
 
 ## References

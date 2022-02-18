@@ -258,4 +258,4 @@ def prepare_cluster_data_d3js(working_dir, num_clusters=50):
 
 
 if __name__ == "__main__":
-    prepare_cluster_data_d3js_all_clusters(Path("../../testdata"))
+    prepare_cluster_data_d3js_all_clusters(Path("../example_input"))
