@@ -19,11 +19,11 @@
         <label style="padding:10px; font-size:xx-large; color:#F2AA4CFF">Label centroids</label> 
         <div>
             <label for="cnBased" style="padding:35px; font-size: xx-large; color:#F2AA4CFF;">-closest node to centroid</label>
-            <input type="radio" id="freqBased" name="labelCentroidsRb" value="freqBased" class="labelCentroidsRb" checked>
+            <input type="radio" id="cnBased" name="labelCentroidsRb" value="cnBased" class="labelCentroidsRb" checked>
         </div>
         <div>
             <label for="freqBased" style="padding:35px; font-size:xx-large; color:#F2AA4CFF">-highest frequency</label> 
-            <input type="radio" id="cnBased" name="labelCentroidsRb" value="cnBased" class="labelCentroidsRb">
+            <input type="radio" id="freqBased" name="labelCentroidsRb" value="freqBased" class="labelCentroidsRb">
         </div>
        <div>
             <label for="itSlider" style="font-size: xx-large; margin:auto; color:#F2AA4CFF; padding:10px">Iterations (collision force)</label>
@@ -473,7 +473,7 @@ d3.select("#itSlider").on("input", function()
     .enter()
     .append("g")
     .append("text")
-    .text(d=>d.highest_freq)
+    .text(d=>d.closest_word )
     .style("font-size","150px")
     .style("font-family", fontType)
     .style("display", d3.select("#switchDetailedView").checked ? "none" : null)
