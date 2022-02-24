@@ -15,15 +15,22 @@ If you just want to test the application:
 ```console
 $ git clone https://github.com/DaOnlyOwner/MethodVisualization.git
 ```
+
+### Force directed graph
 - Navigate into box_collision or circle_collision and open visualize.html. It works right out of the box with a sample input.
 
 If you also want to try to generate input, this should be done with the toolchain. 
-However if you want to do generate input yourself, look into example_input. 2analysis_classes.txt contains among other things the frequency. 3words_with_vectors.pkl contains the words with their vector representation and 4clusters-50.yml lists the different clusters.   
+However if you want to do generate input yourself, look into example_input. 2analysis_classes.txt contains among other things the frequency. 3words_with_vectors.pkl contains the words with their vector representation and 4clusters-50.yml lists the different clusters. If you have the correct inputs, you can drop them in example_input and just run one of the python files (prepare_data.py in circle_collision or box_collision).
+This will generate output in the example_input folder.   
 
 When visualize.html is opened, you first see the overview over the clusters. Here only the word which is closest to the centroid of its cluster is displayed. 
 You can choose from the UI however which word is chosen as the representative in the overview: the closest word to the centroid or the word with highest frequency in its cluster. 
 If you click "enable detailed view" or "Focus whole scene" you can see all the words grouped into clusters. Clusters that are similar in color have similar meaning. This is achieved by reducing the dimensions of the high dimensional vector to two dimension with MDS and using that value as an input into the HSV color wheel. 
 The words are clickable and moveable. By clicking on a word, you can see the distance to its centroid and the name, frequency and distance is displayed on the left side in a UI element. Clicking "Show Centroids" in the UI displays the centroids. 
+
+### Wordcloud
+- If you want to generate wordclouds, navigate into wordcloud and run the python file (vis_wordcloud.py). This will generate wordclouds in the example_input folder.
+There is already an example output in the wordcloud directory.
 
 
 ## References
